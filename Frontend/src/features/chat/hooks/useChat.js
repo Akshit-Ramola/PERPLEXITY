@@ -1,21 +1,29 @@
 import { initializeSocketConnection } from "../service/chat.socket";
 import { sendMessage, getChats, getMessages, deleteChat } from "../service/chat.api";
-import { setChats, setCurrentChatId, setLoading, setError, createNewChat, addNewMessage, addMessages } from "../chat.slice";
+import { setChats, setCurrentChatId, setLoading, setError, createNewChat, addNewMessage, addMessages, removeChat } from "../chat.slice";
 import { useDispatch } from "react-redux";
 
 export const useChat = () => {
     const dispatch = useDispatch();
 
-    async function handleSendMessage({ message, chatId }) {
+    async function handleSendMessage({ message, chatId, signal }) {
         dispatch(setLoading(true))
-        const data = await sendMessage({ message, chatId })
-        const { chat, aiMessage } = data
-        if (!chatId) {
-            dispatch(createNewChat({ chatId: chat._id, title: chat.title }))
+        try {
+            const data = await sendMessage({ message, chatId, signal })
+            const { chat, aiMessage } = data
+            if (!chatId && chat) {
+                dispatch(createNewChat({ chatId: chat._id, title: chat.title }))
+            }
+            const activeChatId = chatId || (chat && chat._id)
+            dispatch(addNewMessage({ chatId: activeChatId, content: message, role: "user" }))
+            dispatch(addNewMessage({ chatId: activeChatId, content: aiMessage.content, role: "ai" }))
+            dispatch(setCurrentChatId(activeChatId))
+        } catch (error) {
+            console.error("Failed to send message", error)
+            throw error
+        } finally {
+            dispatch(setLoading(false))
         }
-        dispatch(addNewMessage({ chatId: chatId || chat._id, content: message, role: "user" }))
-        dispatch(addNewMessage({ chatId: chatId || chat._id, content: aiMessage.content, role: "ai" }))
-        dispatch(setCurrentChatId(chat._id))
     }
 
     async function handleGetChats() {
@@ -54,10 +62,25 @@ export const useChat = () => {
         dispatch(setCurrentChatId(chatId))
     }
 
+    function handleNewChat() {
+        dispatch(setCurrentChatId(null))
+    }
+
+    async function handleDeleteChat(chatId) {
+        dispatch(removeChat(chatId))
+        try {
+            await deleteChat(chatId)
+        } catch (error) {
+            console.error("Failed to delete chat", error)
+        }
+    }
+
     return {
         initializeSocketConnection,
         handleSendMessage,
         handleGetChats,
         handleOpenChat,
+        handleNewChat,
+        handleDeleteChat,
     }
 }

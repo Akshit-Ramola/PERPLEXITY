@@ -3,29 +3,39 @@ import ReactMarkdown from 'react-markdown'
 import { useSelector } from 'react-redux'
 import { useChat } from '../hooks/useChat'
 import remarkGfm from 'remark-gfm'
+import CreateTask from '../components/CreateTask'
 
-const TypewriterMarkdown = ({ content }) => {
+const TypewriterMarkdown = ({ content, isPaused, onComplete }) => {
     const [displayedContent, setDisplayedContent] = useState('');
     const [isTyping, setIsTyping] = useState(true);
+    const currentIndexRef = useRef(0);
 
     useEffect(() => {
         setDisplayedContent('');
         setIsTyping(true);
-        let currentIndex = 0;
-        const speed = 15; // ms per char
+        currentIndexRef.current = 0;
+    }, [content]);
+
+    useEffect(() => {
+        if (isPaused || !isTyping) {
+            setIsTyping(false);
+            if (isPaused && onComplete) onComplete();
+            return;
+        }
 
         const interval = setInterval(() => {
-            if (currentIndex < content.length) {
-                setDisplayedContent(content.slice(0, currentIndex + 1));
-                currentIndex++;
+            if (currentIndexRef.current < content.length) {
+                setDisplayedContent(content.slice(0, currentIndexRef.current + 1));
+                currentIndexRef.current++;
             } else {
                 clearInterval(interval);
                 setIsTyping(false);
+                if (onComplete) onComplete();
             }
-        }, speed);
+        }, 5);
 
         return () => clearInterval(interval);
-    }, [content]);
+    }, [content, isPaused, isTyping, onComplete]);
 
     return (
         <div className={isTyping ? "opacity-90" : ""}>
@@ -66,10 +76,16 @@ const Dashboard = () => {
     const chat = useChat()
     const [chatInput, setChatInput] = useState('')
     const [isThinking, setIsThinking] = useState(false)
+    const [isTyping, setIsTyping] = useState(false)
+    const [isPaused, setIsPaused] = useState(false)
     const [optimisticMsg, setOptimisticMsg] = useState(null)
     const [animatingMessageId, setAnimatingMessageId] = useState(null)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [activeTab, setActiveTab] = useState('chat')
+    const searchInputRef = useRef(null)
+    const abortControllerRef = useRef(null)
     const previousMessagesLengthRef = useRef(0)
-    
+
     const chats = useSelector((state) => state.chat.chats)
     const currentChatId = useSelector((state) => state.chat.currentChatId)
     const messagesEndRef = useRef(null)
@@ -78,7 +94,18 @@ const Dashboard = () => {
         chat.initializeSocketConnection()
         chat.handleGetChats()
     }, [])
-    
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault()
+                searchInputRef.current?.focus()
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [])
+
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
@@ -95,7 +122,7 @@ const Dashboard = () => {
         }
         previousMessagesLengthRef.current = currentMessages.length
     }, [currentMessages])
-    
+
     useEffect(() => {
         if (isThinking || optimisticMsg) {
             scrollToBottom()
@@ -112,17 +139,51 @@ const Dashboard = () => {
 
         setChatInput('')
         setIsThinking(true)
+        setIsTyping(false)
+        setIsPaused(false)
         setOptimisticMsg(trimmedMessage)
 
-        await chat.handleSendMessage({ message: trimmedMessage, chatId: currentChatId })
-        
+        abortControllerRef.current = new AbortController()
+
+        try {
+            await chat.handleSendMessage({ 
+                message: trimmedMessage, 
+                chatId: currentChatId,
+                signal: abortControllerRef.current.signal
+            })
+            setIsTyping(true)
+        } catch (error) {
+            if (error.name === 'CanceledError' || error.name === 'AbortError') {
+                console.log("Response generation was stopped.")
+            } else {
+                console.error("Message submission failed:", error)
+                setChatInput(trimmedMessage) // Restore input on failure
+            }
+        } finally {
+            setIsThinking(false)
+            setOptimisticMsg(null)
+            abortControllerRef.current = null
+        }
+    }
+
+    const handleStop = () => {
+        setIsPaused(true)
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort()
+            abortControllerRef.current = null
+        }
         setIsThinking(false)
-        setOptimisticMsg(null)
+        setIsTyping(false)
     }
 
     const openChat = (chatId) => {
         chat.handleOpenChat(chatId, chats)
+        setActiveTab('chat')
     }
+
+    const filteredChats = Object.values(chats).filter(c => 
+        (c.title || 'New Conversation').toLowerCase().includes(searchQuery.toLowerCase())
+    )
 
     return (
         <main className='min-h-screen w-full bg-[#0e0e0e] text-[#e8e8e6] font-sans selection:bg-cyan-900'>
@@ -133,21 +194,75 @@ const Dashboard = () => {
                         <h1 className='text-xl font-medium tracking-wide'>Perplexity</h1>
                     </div>
 
+                    <button
+                        onClick={() => { chat.handleNewChat(); setActiveTab('chat'); }}
+                        className='mb-4 flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm font-semibold text-[#e8e8e6] transition hover:bg-[#1f1f1f]'
+                    >
+                        <svg className="h-[18px] w-[18px] text-[#8e8e93]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        New chat
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab('tasks')}
+                        className={`mb-6 flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm font-semibold transition ${activeTab === 'tasks' ? 'bg-[#1f1f1f] text-white' : 'text-[#e8e8e6] hover:bg-[#1f1f1f]'}`}
+                    >
+                        <svg className="h-[18px] w-[18px] text-[#8e8e93]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                        </svg>
+                        Automated Tasks
+                    </button>
+
+                    <div className='group relative mb-6 px-1'>
+                        <div className="pointer-events-none absolute inset-y-0 left-1 flex items-center pl-3">
+                            <svg className="h-[14px] w-[14px] text-[#8e8e93] font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                        <input
+                            ref={searchInputRef}
+                            type='text'
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className='block w-full rounded-full border border-white/10 bg-[#232326] py-[6px] pl-9 pr-14 text-[13px] text-white placeholder-[#8e8e93] focus:border-cyan-800/50 focus:bg-[#2b2b2e] focus:outline-none transition-colors'
+                            placeholder='Search chats'
+                        />
+                        <div className="absolute inset-y-0 right-1 flex items-center pr-3 pointer-events-none border-l border-white/10 pl-2 my-1.5 ml-2">
+                            <span className="text-[10px] text-[#6e6e73] font-semibold tracking-wide">Ctrl + K</span>
+                        </div>
+                    </div>
+
                     <div className='flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar'>
                         <div className='text-xs font-semibold text-[#8e8e93] px-2 mb-3 uppercase tracking-wider'>Library</div>
-                        {Object.values(chats).map((c, index) => (
-                            <button
-                                onClick={() => { openChat(c.id) }}
-                                key={index}
-                                type='button'
-                                className={`w-full truncate cursor-pointer rounded-lg px-3 py-2 text-left text-sm transition ${currentChatId === c.id ? 'bg-[#2a2a2a] text-white font-medium' : 'bg-transparent text-[#a0a0a5] hover:bg-[#1f1f1f] hover:text-[#e8e8e6]'}`}
+                        {filteredChats.map((c, index) => (
+                            <div 
+                                key={index} 
+                                className={`group relative flex w-full items-center rounded-lg transition ${currentChatId === c.id ? 'bg-[#2a2a2a]' : 'hover:bg-[#1f1f1f]'}`}
                             >
-                                {c.title || 'New Conversation'}
-                            </button>
+                                <button
+                                    onClick={() => { openChat(c.id) }}
+                                    type='button'
+                                    className={`flex-1 truncate cursor-pointer px-3 py-2 text-left text-sm pr-8 ${currentChatId === c.id ? 'text-white font-medium' : 'bg-transparent text-[#a0a0a5] group-hover:text-[#e8e8e6]'}`}
+                                >
+                                    {c.title || 'New Conversation'}
+                                </button>
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        chat.handleDeleteChat(c.id);
+                                    }}
+                                    className={`absolute right-1.5 p-1 rounded-md text-[#8e8e93] hover:text-[#ff6b6b] hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all ${currentChatId === c.id ? 'opacity-100' : ''}`}
+                                    title="Delete chat"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
                         ))}
                     </div>
                 </aside>
 
+                {activeTab === 'chat' ? (
                 <section className='relative flex h-full min-w-0 flex-1 flex-col'>
                     <div className='flex-1 overflow-y-auto pb-[130px] pt-8 px-4'>
                         <div className='mx-auto max-w-3xl space-y-8'>
@@ -174,7 +289,14 @@ const Dashboard = () => {
                                             </div>
                                             <div className='pl-9'>
                                                 {animatingMessageId === (msg.id || idx) ? (
-                                                    <TypewriterMarkdown content={msg.content} />
+                                                    <TypewriterMarkdown 
+                                                        content={msg.content} 
+                                                        isPaused={isPaused} 
+                                                        onComplete={() => {
+                                                            setIsTyping(false);
+                                                            setAnimatingMessageId(null);
+                                                        }} 
+                                                    />
                                                 ) : (
                                                     <ReactMarkdown
                                                         components={{
@@ -224,7 +346,7 @@ const Dashboard = () => {
                                     <div className='w-full text-[15px] text-[#d1d5db]'>
                                         <div className="flex items-center gap-3 mb-2">
                                             <div className="w-6 h-6 rounded-full bg-[#1e1e20] text-[#a0a0a5] flex items-center justify-center text-xs border border-white/5">
-                                                <svg className="w-4 h-4 animate-spin text-cyan-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+                                                <svg className="w-4 h-4 animate-spin text-cyan-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" /></svg>
                                             </div>
                                             <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 animate-pulse">Analyzing sources...</span>
                                         </div>
@@ -244,15 +366,25 @@ const Dashboard = () => {
                                     onChange={(event) => setChatInput(event.target.value)}
                                     placeholder='Ask anything...'
                                     className='w-full bg-transparent pl-6 pr-14 py-4 text-[15px] text-[#e8e8e6] outline-none placeholder:text-[#8e8e93]'
-                                    disabled={isThinking}
+                                    disabled={isThinking && !isPaused}
                                 />
-                                <button
-                                    type='submit'
-                                    disabled={!chatInput.trim() || isThinking}
-                                    className='absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition hover:bg-white/90 disabled:bg-[#333333] disabled:text-[#666666] disabled:cursor-not-allowed'
-                                >
-                                    <svg className="w-5 h-5 ml-[2px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-                                </button>
+                                { (isThinking || isTyping) && !isPaused ? (
+                                    <button
+                                        type='button'
+                                        onClick={handleStop}
+                                        className='absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-[#333333] text-white transition hover:bg-[#444444]'
+                                    >
+                                        <div className="w-3.5 h-3.5 bg-current rounded-sm"></div>
+                                    </button>
+                                ) : (
+                                    <button
+                                        type='submit'
+                                        disabled={!chatInput.trim() || (isThinking && !isPaused)}
+                                        className='absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition hover:bg-white/90 disabled:bg-[#333333] disabled:text-[#666666] disabled:cursor-not-allowed'
+                                    >
+                                        <svg className="w-5 h-5 ml-[2px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                                    </button>
+                                )}
                             </form>
                             <div className="mt-3 text-center text-xs text-[#6e6e73]">
                                 AI can make mistakes. Verify important information.
@@ -260,6 +392,9 @@ const Dashboard = () => {
                         </div>
                     </div>
                 </section>
+                ) : (
+                    <CreateTask />
+                )}
             </section>
         </main>
     )

@@ -38,10 +38,17 @@ const chatSlice = createSlice({
         setError: (state, action) => {
             state.error = action.payload
         },
+        removeChat: (state, action) => {
+            const chatId = action.payload
+            delete state.chats[chatId]
+            if (state.currentChatId === chatId) {
+                state.currentChatId = null
+            }
+        },
     }
 })
 
-export const { setChats, setCurrentChatId, setLoading, setError, createNewChat, addNewMessage, addMessages } = chatSlice.actions;
+export const { setChats, setCurrentChatId, setLoading, setError, createNewChat, addNewMessage, addMessages, removeChat } = chatSlice.actions;
 export default chatSlice.reducer;
 
 // chats = {
