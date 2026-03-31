@@ -51,20 +51,3 @@ const chatSlice = createSlice({
 export const { setChats, setCurrentChatId, setLoading, setError, createNewChat, addNewMessage, addMessages, removeChat } = chatSlice.actions;
 export default chatSlice.reducer;
 
-// chats = {
-//     "docket and AWS": {
-//         messages: [
-//             {
-//                 role: "user",
-//                 content: "What is docker?"
-//             },
-//             {
-//                 role: "ai",
-//                 content: "Docker is a platform for developing, shipping, and running applications in containers."
-//             }
-//         ],
-//         id: "docker and AWS",
-//         lastUpdated: "2022-01-01T00:00:00.000Z",
-//     }
-
-// }
