@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router';
+import { Link, Navigate, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../hook/useAuth';
 import { useSelector } from 'react-redux';
 
 const Login = () => {
-    const navigate = useNavigate()
+    const navigate = useNavigate();
+    const location = useLocation();
+    const successMessage = location.state?.successMessage;
+
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -13,7 +16,7 @@ const Login = () => {
     const user = useSelector((state) => state.auth.user);
     const loading = useSelector((state) => state.auth.loading);
     const error = useSelector((state) => state.auth.error);
-    const { handleLogin } = useAuth()
+    const { handleLogin } = useAuth();
 
     const handleChange = (e) => {
         setFormData({
@@ -42,6 +45,11 @@ const Login = () => {
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-extrabold text-white mb-2">Welcome Back</h2>
                     <p className="text-gray-400 mb-4">Sign in to your account</p>
+                    {successMessage && (
+                        <div className="bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 text-sm rounded-lg p-3 mb-4">
+                            {successMessage}
+                        </div>
+                    )}
                     {error && (
                         <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-sm rounded-lg p-3">
                             {error}

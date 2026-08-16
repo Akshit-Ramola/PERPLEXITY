@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-    baseURL: "https://perplexity-1n6y.onrender.com",
+    baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
     withCredentials: true,
 })
 
@@ -17,5 +17,10 @@ export async function login({ email, password }) {
 
 export async function getMe() {
     const response = await api.get("/api/auth/get-me")
+    return response.data
+}
+
+export async function logout() {
+    const response = await api.get("/api/auth/logout")
     return response.data
 }

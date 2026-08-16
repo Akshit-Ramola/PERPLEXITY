@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useSelector } from 'react-redux'
 import { useChat } from '../hooks/useChat'
+import { useAuth } from '../../auth/hook/useAuth'
 import remarkGfm from 'remark-gfm'
 import CreateTask from '../components/CreateTask'
 
@@ -74,6 +75,8 @@ const TypewriterMarkdown = ({ content, isPaused, onComplete }) => {
 
 const Dashboard = () => {
     const chat = useChat()
+    const { handleLogout } = useAuth()
+    const user = useSelector((state) => state.auth.user)
     const [chatInput, setChatInput] = useState('')
     const [isThinking, setIsThinking] = useState(false)
     const [isTyping, setIsTyping] = useState(false)
@@ -260,10 +263,52 @@ const Dashboard = () => {
                             </div>
                         ))}
                     </div>
+
+                    <div className='mt-auto border-t border-white/5 pt-3 px-1'>
+                        <div className='flex items-center justify-between gap-2 p-2 rounded-lg bg-[#18181a] border border-white/5'>
+                            <div className='flex items-center gap-2.5 truncate min-w-0'>
+                                <div className='w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-xs font-bold text-white uppercase shrink-0 shadow-md'>
+                                    {user?.username?.charAt(0) || 'U'}
+                                </div>
+                                <div className='truncate'>
+                                    <p className='text-xs font-semibold text-white truncate'>{user?.username || 'User'}</p>
+                                    <p className='text-[10px] text-[#8e8e93] truncate'>{user?.email || ''}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleLogout}
+                                className='p-1.5 rounded-md text-[#8e8e93] hover:text-red-400 hover:bg-white/10 transition-colors shrink-0 cursor-pointer'
+                                title='Log out'
+                            >
+                                <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1' />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                 </aside>
 
                 {activeTab === 'chat' ? (
                 <section className='relative flex h-full min-w-0 flex-1 flex-col'>
+                    <div className="absolute top-4 right-6 z-20 flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-[#1a1a1c] border border-white/10 rounded-full py-1 px-3 shadow-lg">
+                            <div className="w-5 h-5 rounded-full bg-gradient-to-r from-cyan-600 to-blue-600 flex items-center justify-center text-[10px] font-bold text-white uppercase">
+                                {user?.username?.charAt(0) || 'U'}
+                            </div>
+                            <span className="text-xs font-medium text-gray-300 hidden sm:inline">{user?.username || 'Account'}</span>
+                            <button
+                                onClick={handleLogout}
+                                className="ml-1 text-xs text-red-400 hover:text-red-300 font-semibold px-2 py-0.5 rounded hover:bg-red-500/10 transition-colors flex items-center gap-1 cursor-pointer"
+                                title="Log out"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+
                     <div className='flex-1 overflow-y-auto pb-[130px] pt-8 px-4'>
                         <div className='mx-auto max-w-3xl space-y-8'>
                             {currentMessages.length === 0 && !optimisticMsg && (

@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, Navigate, useNavigate } from 'react-router';
 import { useAuth } from '../hook/useAuth';
+import { useSelector } from 'react-redux';
 
 const Register = () => {
     const navigate = useNavigate();
     const { handleRegister } = useAuth();
+    const user = useSelector((state) => state.auth.user);
+    const loading = useSelector((state) => state.auth.loading);
+    const error = useSelector((state) => state.auth.error);
 
+    const [successMsg, setSuccessMsg] = useState('');
     const [formData, setFormData] = useState({
         username: '',
         email: '',
@@ -25,18 +30,33 @@ const Register = () => {
 
         const success = await handleRegister(formData);
         if (success) {
-            navigate('/login');
+            setSuccessMsg('Registration successful! Redirecting to sign in page...');
+            setTimeout(() => {
+                navigate('/login', { state: { successMessage: 'Registration successful! Please sign in with your credentials.' } });
+            }, 1200);
         }
     };
 
-
+    if (!loading && user) {
+        return <Navigate to="/" replace />;
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-950 bg-gradient-to-br from-gray-900 via-gray-950 to-red-950 p-4">
             <div className="max-w-md w-full bg-gray-900/50 backdrop-blur-xl border border-red-900/30 rounded-2xl p-8 shadow-2xl shadow-red-900/20">
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-extrabold text-white mb-2">Create Account</h2>
-                    <p className="text-gray-400">Join us and start your journey</p>
+                    <p className="text-gray-400 mb-4">Join us and start your journey</p>
+                    {successMsg && (
+                        <div className="bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 text-sm rounded-lg p-3 mb-4">
+                            {successMsg}
+                        </div>
+                    )}
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-sm rounded-lg p-3">
+                            {error}
+                        </div>
+                    )}
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
