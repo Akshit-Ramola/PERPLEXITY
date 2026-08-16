@@ -8,10 +8,25 @@ import morgan from 'morgan';
 import cors from 'cors';
 const app = express();
 
+const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://perplexity-lime.vercel.app",
+    process.env.CLIENT_URL
+].filter(Boolean);
+
 app.use(cors({
-    origin: ["http://localhost:5173", "http://localhost:5174"],
+    origin: (origin, callback) => {
+        // allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
+            return callback(null, true);
+        }
+        return callback(null, true);
+    },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 //Middleware
